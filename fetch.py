@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import requests
+import argparse
 import json
 import sys
 import re
@@ -14,8 +15,11 @@ def debug(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
 
 
-def fetch_cache(url, mode='lxml'):
-    dest = Path('./page_cache/') / (url.replace('/', '_') + '.html')
+def fetch_cache(url, *, mode, force=False, cache_dir: Path):
+    if mode == 'lxml':
+        dest = cache_dir / 'html' / (url.replace('/', '_') + '.html')
+    elif mode == 'json':
+        dest = cache_dir / 'json' / (url.replace('/', '_') + '.json')
     dest.parent.mkdir(exist_ok=True)
 
     if url + mode in page_cache:
@@ -23,6 +27,8 @@ def fetch_cache(url, mode='lxml'):
         return page_cache[url + mode]
 
     try:
+        if force:
+            raise Exception('trigger catch')
         with open(dest, 'r', encoding='utf-8') as infile:
             body = infile.read()
             debug('using cache for', url)
@@ -53,11 +59,13 @@ def fetch_cache(url, mode='lxml'):
     return body
 
 
-def fetch_cache_img(url, name):
-    dest = Path('./img_cache/') / name
+def fetch_cache_img(url, *, name, force=False, cache_dir: Path):
+    dest = cache_dir / 'img' / name
     dest.parent.mkdir(exist_ok=True)
 
     try:
+        if force:
+            raise Exception('trigger catch')
         with open(dest, 'r', encoding='utf-8') as infile:
             debug('using cache for', url)
     except:
@@ -140,7 +148,7 @@ def parse_location_attrs(locationAttributes):
     return attrs
 
 
-def get_buildings():
+def get_buildings(*, force=False, cache_dir: Path = Path('./cache')):
     urls = [
         ['building', 'https://apps.carleton.edu/map/types/buildings/',],
         ['outdoors', 'https://apps.carleton.edu/map/types/outdoors/',],
@@ -154,7 +162,7 @@ def get_buildings():
     hall_regex = re.compile(r'\bHall\b')
 
     for category, url in urls:
-        listing_soup = fetch_cache(url, 'lxml')
+        listing_soup = fetch_cache(url, mode='lxml', force=force, cache_dir=cache_dir)
 
         for location in listing_soup.select('.currentList .locationListing li'):
             ident = location.select_one('a').attrs['href'].split('/')[-2]
@@ -167,7 +175,7 @@ def get_buildings():
             classes = location.attrs.get('class', [])
             name = location.get_text().strip()
 
-            soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', 'lxml')
+            soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', force=force, mode='lxml', cache_dir=cache_dir)
 
             categories = parse_classes(classes)
             categories[category] = True
@@ -184,11 +192,13 @@ def get_buildings():
             if img_el:
                 link = img_el.select_one('img').attrs['src']
                 link = link.replace('_tn', '')
-                img = fetch_cache_img('https://apps.carleton.edu' + link, name=ident + '.jpg')
+                img = fetch_cache_img('https://apps.carleton.edu' + link, force=force, name=ident + '.jpg', cache_dir=cache_dir)
 
             json_detail = fetch_cache(
                 f'https://apps.carleton.edu/map/api/static/?size=1x1&context=1&buildings={ident}&format=json',
                 mode='json',
+                force=force,
+                cache_dir=cache_dir,
             )
 
             outline = []
@@ -211,7 +221,19 @@ def get_buildings():
     return locations
 
 
-buildings = list(get_buildings().values())
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--force', action='store_true',
+                        help='Force a re-download of all files')
+    parser.add_argument('--cache-dir', action='store', default='./cache', metavar='DIR',
+                        help='Where to cache the downloaded files')
+    args = parser.parse_args()
 
-with open('./data.json', 'w', encoding='utf-8') as outfile:
-    json.dump(buildings, outfile, indent='\t', sort_keys=True)
+    buildings = get_buildings(force=args.force, cache_dir=Path(args.cache_dir))
+    building_list = list(buildings.values())
+    dump = json.dumps(building_list, indent='\t', sort_keys=True)
+    print(dump)
+
+
+if __name__ == '__main__':
+    main()
