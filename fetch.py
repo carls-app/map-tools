@@ -110,7 +110,7 @@ def parse_location_attrs(locationAttributes):
                 elif text == 'Unkown':
                     access_level = 'unknown'
 
-                attrs['accessibility-level'] = access_level
+                attrs['accessibility'] = access_level
         elif label == 'floors':
             floors = thing.select('.buildingFloors a')
             value = [{'href': f.attrs['href'], 'label': f.get_text()} for f in floors]
