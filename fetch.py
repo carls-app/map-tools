@@ -30,6 +30,17 @@ def fetch_cache(url, mode='lxml'):
         debug('fetching', url)
         r = requests.get(url)
         body = r.text
+        if mode == 'lxml':
+            soup = BeautifulSoup(body, 'lxml')
+            [t.decompose() for t in soup.find_all('script')]
+            [t.decompose() for t in soup.find_all('style')]
+            [t.decompose() for t in soup.find_all('link')]
+            [t.decompose() for t in soup.find_all('img') if t.attrs['src'].startswith('data:')]
+            [t.decompose() for t in soup.find_all('input')]
+            [t.decompose() for t in soup.select('#mapData')]
+            [t.decompose() for t in soup.select('#footer')]
+            [t.decompose() for t in soup.select('#carletonBanner')]
+            body = soup.prettify()
         with open(dest, 'w', encoding='utf-8') as outfile:
             outfile.write(body)
 
