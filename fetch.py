@@ -181,6 +181,7 @@ def get_buildings():
             )
 
             outline = []
+            centerpoint = None
             if not json_detail.get('error', False):
                 outline = json_detail['all_building_coords']
                 outline = [[p['lat'], p['lon']] for shape in outline for p in shape]
