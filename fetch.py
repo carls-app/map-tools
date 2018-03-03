@@ -14,25 +14,20 @@ def debug(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
 
 
-def debug_msg(*args, **kwargs):
-    pass
-    # print(*args, **kwargs, file=sys.stderr)
-
-
 def fetch_cache(url, mode='lxml'):
     dest = Path('./page_cache/') / (url.replace('/', '_') + '.html')
     dest.parent.mkdir(exist_ok=True)
 
     if url + mode in page_cache:
-        debug_msg('using memory cache for', url)
+        debug('using memory cache for', url)
         return page_cache[url + mode]
 
     try:
         with open(dest, 'r', encoding='utf-8') as infile:
             body = infile.read()
-            debug_msg('using cache for', url)
+            debug('using cache for', url)
     except:
-        debug_msg('fetching', url)
+        debug('fetching', url)
         r = requests.get(url)
         body = r.text
         with open(dest, 'w', encoding='utf-8') as outfile:
@@ -53,9 +48,9 @@ def fetch_cache_img(url, name):
 
     try:
         with open(dest, 'r', encoding='utf-8') as infile:
-            debug_msg('using cache for', url)
+            debug('using cache for', url)
     except:
-        debug_msg('fetching', url)
+        debug('fetching', url)
         r = requests.get(url)
         with open(dest, 'wb') as outfile:
             outfile.write(r.content)
@@ -80,9 +75,6 @@ def parse_classes(classes):
 
 
 def parse_location_attrs(locationAttributes):
-    # print()
-    # print('starting parse')
-    # print()
     attrs = {
         'address': None,
         'accessibility-level': 'unknown',
@@ -134,10 +126,6 @@ def parse_location_attrs(locationAttributes):
 
         attrs[label] = value
 
-        if label not in ['address', 'floors', 'offices', 'departments', 'description']:
-            print(thing)
-            print()
-            print(label, value)
     return attrs
 
 
@@ -161,7 +149,7 @@ def get_buildings():
             ident = location.select_one('a').attrs['href'].split('/')[-2]
 
             if ident in locations:
-                debug_msg('already processed', ident)
+                debug('already processed', ident)
                 locations[ident]['categories'][category] = True
                 continue
 
@@ -194,7 +182,6 @@ def get_buildings():
 
             outline = []
             if not json_detail.get('error', False):
-                # debug(json_detail)
                 outline = json_detail['all_building_coords']
                 outline = [[p['lat'], p['lon']] for shape in outline for p in shape]
                 centerpoint = [json_detail['center_lat'], json_detail['center_lon']]
