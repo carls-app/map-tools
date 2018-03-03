@@ -104,16 +104,16 @@ def parse_location_attrs(locationAttributes):
 
         label_el = thing.select_one('.label')
         if label_el:
-            label = label_el.get_text().lower().strip(':')
+            label = label_el.get_text().strip().lower().strip(':')
 
         value = None
         if label == 'address':
             bits = thing.select('.buildingAttributes li')
             if len(bits) >= 1:
-                value = bits[0].get_text()
+                value = bits[0].get_text().strip()
             if len(bits) == 2:
                 access_level = 'unknown'
-                text = bits[1].get_text()
+                text = bits[1].get_text().strip()
                 if text == 'Wheelchair Access':
                     access_level = 'wheelchair'
                 elif text == 'No Handicap Access':
@@ -124,16 +124,16 @@ def parse_location_attrs(locationAttributes):
                 attrs['accessibility'] = access_level
         elif label == 'floors':
             floors = thing.select('.buildingFloors a')
-            value = [{'href': f.attrs['href'], 'label': f.get_text()} for f in floors]
+            value = [{'href': f.attrs['href'], 'label': f.get_text().strip()} for f in floors]
         elif label == 'offices':
             offices = thing.select('.buildingAttributes a')
-            value = [{'href': o.attrs['href'], 'label': o.get_text()} for o in offices]
+            value = [{'href': o.attrs['href'], 'label': o.get_text().strip()} for o in offices]
         elif label == 'departments':
             depts = thing.select('.buildingAttributes a')
-            value = [{'href': d.attrs['href'], 'label': d.get_text()} for d in depts]
+            value = [{'href': d.attrs['href'], 'label': d.get_text().strip()} for d in depts]
         elif label == 'description':
             description_bits = thing.select('.buildingAttributes p')
-            value = [bit.get_text() for bit in description_bits]
+            value = [bit.get_text().strip() for bit in description_bits]
 
         attrs[label] = value
 
@@ -165,7 +165,7 @@ def get_buildings():
                 continue
 
             classes = location.attrs.get('class', [])
-            name = location.get_text()
+            name = location.get_text().strip()
 
             soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', 'lxml')
 
