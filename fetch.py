@@ -2,6 +2,7 @@
 
 import requests
 import argparse
+import yaml
 import json
 import sys
 import re
@@ -148,7 +149,7 @@ def parse_location_attrs(locationAttributes):
     return attrs
 
 
-def get_buildings(*, force=False, cache_dir: Path = Path('./cache')):
+def get_buildings(*, force=False, cache_dir: Path, overrides={}):
     urls = [
         ['building', 'https://apps.carleton.edu/map/types/buildings/',],
         ['outdoors', 'https://apps.carleton.edu/map/types/outdoors/',],
@@ -225,11 +226,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--force', action='store_true',
                         help='Force a re-download of all files')
-    parser.add_argument('--cache-dir', action='store', default='./cache', metavar='DIR',
+    parser.add_argument('--root-dir', action='store', default='./', metavar='DIR',
                         help='Where to cache the downloaded files')
     args = parser.parse_args()
 
-    buildings = get_buildings(force=args.force, cache_dir=Path(args.cache_dir))
+    cache_dir = Path(args.root_dir) / 'cache'
+    overrides_file = Path(args.root_dir) / 'overrides.yaml'
+    with open(overrides_file, 'r', encoding='utf-8') as infile:
+        overrides = yaml.safe_load(infile)
+
+    buildings = get_buildings(force=args.force, cache_dir=cache_dir, overrides=overrides)
     building_list = list(buildings.values())
     dump = json.dumps(building_list, indent='\t', sort_keys=True)
     print(dump)
