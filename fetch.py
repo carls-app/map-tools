@@ -102,6 +102,7 @@ def parse_location_attrs(locationAttributes):
         'offices': [],
         'departments': [],
         'description': '',
+        'nickname': '',
     }
 
     for i, thing in enumerate(locationAttributes):
@@ -201,6 +202,9 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
 
             location_attrs = soup.select('.locationAttribute')
             attributes = parse_location_attrs(location_attrs)
+
+            if override and override.get('nickname', ''):
+                nickname = override['nickname']
 
             img = None
             img_el = soup.select_one('#locationRepresentativeImage')
