@@ -97,7 +97,7 @@ def parse_classes(classes):
 def parse_location_attrs(locationAttributes):
     attrs = {
         'address': None,
-        'accessibility-level': 'unknown',
+        'accessibility': 'unknown',
         'floors': [],
         'offices': [],
         'departments': [],
