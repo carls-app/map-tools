@@ -149,7 +149,7 @@ def parse_location_attrs(locationAttributes):
     return attrs
 
 
-def get_buildings(*, force=False, cache_dir: Path, overrides={}):
+def get_features(*, force=False, cache_dir: Path, overrides={}):
     urls = [
         ['building', 'https://apps.carleton.edu/map/types/buildings/',],
         ['outdoors', 'https://apps.carleton.edu/map/types/outdoors/',],
@@ -206,18 +206,47 @@ def get_buildings(*, force=False, cache_dir: Path, overrides={}):
             centerpoint = None
             if not json_detail.get('error', False):
                 outline = json_detail['all_building_coords']
-                outline = [[p['lat'], p['lon']] for shape in outline for p in shape]
-                centerpoint = [json_detail['center_lat'], json_detail['center_lon']]
+                outline = [[[p['lon'], p['lat']] for shape in outline for p in shape]]
+                centerpoint = [json_detail['center_lon'], json_detail['center_lat']]
 
-            locations[ident] = {
+            feature = {
+                'type': 'Feature',
                 'id': ident,
-                'name': name,
-                'photo': img,
-                'categories': categories,
-                'outline': outline,
-                'center': centerpoint,
-                **attributes,
+                'properties': {
+                    'name': name,
+                    'categories': categories,
+                    **attributes,
+                },
+                'geometry': {
+                    'type': 'GeometryCollection',
+                    'geometries': []
+                }
             }
+
+            if img:
+                feature['properties']['photos'] = [img]
+
+            if len(outline):
+                # the first and last positions of at ring of coordinates
+                # must be the same
+                for ring in outline:
+                    if ring[0] != ring[-1]:
+                        debug(f'editing ring for {ident}')
+                        ring.append(ring[0])
+                feature['geometry']['geometries'].append({
+                    'type': 'Polygon',
+                    'coordinates': outline,
+                })
+            if centerpoint:
+                feature['geometry']['geometries'].append({
+                    'type': 'Point',
+                    'coordinates': centerpoint,
+                })
+            if not centerpoint and not len(outline):
+                debug(f'warning: {ident} has no geometry!')
+                del feature['geometry']
+
+            locations[ident] = feature
 
     return locations
 
@@ -235,9 +264,12 @@ def main():
     with open(overrides_file, 'r', encoding='utf-8') as infile:
         overrides = yaml.safe_load(infile)
 
-    buildings = get_buildings(force=args.force, cache_dir=cache_dir, overrides=overrides)
-    building_list = list(buildings.values())
-    dump = json.dumps(building_list, indent='\t', sort_keys=True)
+    features = get_features(force=args.force, cache_dir=cache_dir, overrides=overrides)
+    feature_collection = {
+        'type': 'FeatureCollection',
+        'features': list(features.values()),
+    }
+    dump = json.dumps(feature_collection, indent='\t', sort_keys=True, ensure_ascii=False)
     print(dump)
 
 
