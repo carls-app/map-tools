@@ -2,6 +2,7 @@
 
 import requests
 import argparse
+import yaml
 import json
 import sys
 import re
@@ -78,17 +79,17 @@ def fetch_cache_img(url, *, name, force=False, cache_dir: Path):
 
 
 def parse_classes(classes):
-    categories = {}
+    categories = set()
 
     for c in classes:
         if c == "academicTypeLocation":
-            categories['academic'] = True
+            categories.add('academic')
         elif c == "administrativeTypeLocation":
-            categories['administrative'] = True
+            categories.add('administrative')
         elif c == "employeeHousingTypeLocation":
-            categories['employee-housing'] = True
+            categories.add('employee-housing')
         elif c == "studentHousingTypeLocation":
-            categories['student-housing'] = True
+            categories.add('student-housing')
 
     return categories
 
@@ -96,11 +97,12 @@ def parse_classes(classes):
 def parse_location_attrs(locationAttributes):
     attrs = {
         'address': None,
-        'accessibility-level': 'unknown',
+        'accessibility': 'unknown',
         'floors': [],
         'offices': [],
         'departments': [],
-        'description': None,
+        'description': '',
+        'nickname': '',
     }
 
     for i, thing in enumerate(locationAttributes):
@@ -133,22 +135,30 @@ def parse_location_attrs(locationAttributes):
         elif label == 'floors':
             floors = thing.select('.buildingFloors a')
             value = [{'href': f.attrs['href'], 'label': f.get_text().strip()} for f in floors]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'offices':
             offices = thing.select('.buildingAttributes a')
             value = [{'href': o.attrs['href'], 'label': o.get_text().strip()} for o in offices]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'departments':
             depts = thing.select('.buildingAttributes a')
             value = [{'href': d.attrs['href'], 'label': d.get_text().strip()} for d in depts]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'description':
-            description_bits = thing.select('.buildingAttributes p')
-            value = [bit.get_text().strip() for bit in description_bits]
+            description_bits = thing.select('p')
+            value = "\n\n".join([bit.get_text().strip() for bit in description_bits])
 
         attrs[label] = value
+
+    if not attrs['address'] and not attrs['description']:
+        description_bits = [thing.select('p') for thing in locationAttributes]
+        value = "\n\n".join([bit.get_text().strip() for thing in description_bits for bit in thing])
+        attrs['description'] = value
 
     return attrs
 
 
-def get_buildings(*, force=False, cache_dir: Path = Path('./cache')):
+def get_features(*, force=False, cache_dir: Path, overrides={}):
     urls = [
         ['building', 'https://apps.carleton.edu/map/types/buildings/',],
         ['outdoors', 'https://apps.carleton.edu/map/types/outdoors/',],
@@ -169,23 +179,32 @@ def get_buildings(*, force=False, cache_dir: Path = Path('./cache')):
 
             if ident in locations:
                 debug('already processed', ident)
-                locations[ident]['categories'][category] = True
+                locations[ident]['properties']['categories'].add(category)
                 continue
+
+            # grab the override, if it exists
+            override = next((x for x in overrides['changes'] if x['id'] == ident), None)
 
             classes = location.attrs.get('class', [])
             name = location.get_text().strip()
 
+            if override and override.get('name', ''):
+                name = override['name']
+
             soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', force=force, mode='lxml', cache_dir=cache_dir)
 
             categories = parse_classes(classes)
-            categories[category] = True
+            categories.add(category)
             if house_regex.search(name):
-                categories['house'] = True
+                categories.add('house')
             elif hall_regex.search(name):
-                categories['hall'] = True
+                categories.add('hall')
 
             location_attrs = soup.select('.locationAttribute')
             attributes = parse_location_attrs(location_attrs)
+
+            if override and override.get('nickname', ''):
+                nickname = override['nickname']
 
             img = None
             img_el = soup.select_one('#locationRepresentativeImage')
@@ -205,18 +224,56 @@ def get_buildings(*, force=False, cache_dir: Path = Path('./cache')):
             centerpoint = None
             if not json_detail.get('error', False):
                 outline = json_detail['all_building_coords']
-                outline = [[p['lat'], p['lon']] for shape in outline for p in shape]
-                centerpoint = [json_detail['center_lat'], json_detail['center_lon']]
+                outline = [[[p['lon'], p['lat']] for shape in outline for p in shape]]
+                centerpoint = [json_detail['center_lon'], json_detail['center_lat']]
 
-            locations[ident] = {
+            feature = {
+                'type': 'Feature',
                 'id': ident,
-                'name': name,
-                'photo': img,
-                'categories': categories,
-                'outline': outline,
-                'center': centerpoint,
-                **attributes,
+                'properties': {
+                    'name': name,
+                    'categories': categories,
+                    **attributes,
+                },
+                'geometry': {
+                    'type': 'GeometryCollection',
+                    'geometries': []
+                }
             }
+
+            if img:
+                feature['properties']['photos'] = [img]
+
+            if override and override.get('outline', []):
+                outline = override['outline']
+
+            if override and override.get('centerpoint', []):
+                centerpoint = override['centerpoint']
+
+            if len(outline):
+                # the first and last positions of at ring of coordinates
+                # must be the same
+                for ring in outline:
+                    if ring[0] != ring[-1]:
+                        debug(f'editing ring for {ident}')
+                        ring.append(ring[0])
+                feature['geometry']['geometries'].append({
+                    'type': 'Polygon',
+                    'coordinates': outline,
+                })
+            if centerpoint:
+                feature['geometry']['geometries'].append({
+                    'type': 'Point',
+                    'coordinates': centerpoint,
+                })
+            if not centerpoint and not len(outline):
+                debug(f'warning: {ident} has no geometry!')
+                del feature['geometry']
+
+            locations[ident] = feature
+
+    for location in locations.values():
+        location['properties']['categories'] = sorted(list(location['properties']['categories']))
 
     return locations
 
@@ -225,13 +282,21 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--force', action='store_true',
                         help='Force a re-download of all files')
-    parser.add_argument('--cache-dir', action='store', default='./cache', metavar='DIR',
+    parser.add_argument('--root-dir', action='store', default='./', metavar='DIR',
                         help='Where to cache the downloaded files')
     args = parser.parse_args()
 
-    buildings = get_buildings(force=args.force, cache_dir=Path(args.cache_dir))
-    building_list = list(buildings.values())
-    dump = json.dumps(building_list, indent='\t', sort_keys=True)
+    cache_dir = Path(args.root_dir) / 'cache'
+    overrides_file = Path(args.root_dir) / 'overrides.yaml'
+    with open(overrides_file, 'r', encoding='utf-8') as infile:
+        overrides = yaml.safe_load(infile)
+
+    features = get_features(force=args.force, cache_dir=cache_dir, overrides=overrides)
+    feature_collection = {
+        'type': 'FeatureCollection',
+        'features': list(features.values()),
+    }
+    dump = json.dumps(feature_collection, indent='\t', sort_keys=True, ensure_ascii=False)
     print(dump)
 
 
