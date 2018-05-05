@@ -101,7 +101,7 @@ def parse_location_attrs(locationAttributes):
         'floors': [],
         'offices': [],
         'departments': [],
-        'description': None,
+        'description': '',
     }
 
     for i, thing in enumerate(locationAttributes):
@@ -141,10 +141,15 @@ def parse_location_attrs(locationAttributes):
             depts = thing.select('.buildingAttributes a')
             value = [{'href': d.attrs['href'], 'label': d.get_text().strip()} for d in depts]
         elif label == 'description':
-            description_bits = thing.select('.buildingAttributes p')
-            value = [bit.get_text().strip() for bit in description_bits]
+            description_bits = thing.select('p')
+            value = "\n\n".join([bit.get_text().strip() for bit in description_bits])
 
         attrs[label] = value
+
+    if not attrs['address'] and not attrs['description']:
+        description_bits = [thing.select('p') for thing in locationAttributes]
+        value = "\n\n".join([bit.get_text().strip() for thing in description_bits for bit in thing])
+        attrs['description'] = value
 
     return attrs
 
