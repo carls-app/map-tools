@@ -181,8 +181,14 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
                 locations[ident]['properties']['categories'].add(category)
                 continue
 
+            # grab the override, if it exists
+            override = next((x for x in overrides['changes'] if x['id'] == ident), None)
+
             classes = location.attrs.get('class', [])
             name = location.get_text().strip()
+
+            if override and override.get('name', ''):
+                name = override['name']
 
             soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', force=force, mode='lxml', cache_dir=cache_dir)
 
