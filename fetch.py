@@ -79,17 +79,17 @@ def fetch_cache_img(url, *, name, force=False, cache_dir: Path):
 
 
 def parse_classes(classes):
-    categories = {}
+    categories = set()
 
     for c in classes:
         if c == "academicTypeLocation":
-            categories['academic'] = True
+            categories.add('academic')
         elif c == "administrativeTypeLocation":
-            categories['administrative'] = True
+            categories.add('administrative')
         elif c == "employeeHousingTypeLocation":
-            categories['employee-housing'] = True
+            categories.add('employee-housing')
         elif c == "studentHousingTypeLocation":
-            categories['student-housing'] = True
+            categories.add('student-housing')
 
     return categories
 
@@ -170,7 +170,7 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
 
             if ident in locations:
                 debug('already processed', ident)
-                locations[ident]['categories'][category] = True
+                locations[ident]['properties']['categories'].add(category)
                 continue
 
             classes = location.attrs.get('class', [])
@@ -179,11 +179,11 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
             soup = fetch_cache(f'https://apps.carleton.edu/map/{ident}/', force=force, mode='lxml', cache_dir=cache_dir)
 
             categories = parse_classes(classes)
-            categories[category] = True
+            categories.add(category)
             if house_regex.search(name):
-                categories['house'] = True
+                categories.add('house')
             elif hall_regex.search(name):
-                categories['hall'] = True
+                categories.add('hall')
 
             location_attrs = soup.select('.locationAttribute')
             attributes = parse_location_attrs(location_attrs)
@@ -247,6 +247,9 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
                 del feature['geometry']
 
             locations[ident] = feature
+
+    for location in locations.values():
+        location['properties']['categories'] = sorted(list(location['properties']['categories']))
 
     return locations
 
