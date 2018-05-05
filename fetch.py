@@ -134,12 +134,15 @@ def parse_location_attrs(locationAttributes):
         elif label == 'floors':
             floors = thing.select('.buildingFloors a')
             value = [{'href': f.attrs['href'], 'label': f.get_text().strip()} for f in floors]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'offices':
             offices = thing.select('.buildingAttributes a')
             value = [{'href': o.attrs['href'], 'label': o.get_text().strip()} for o in offices]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'departments':
             depts = thing.select('.buildingAttributes a')
             value = [{'href': d.attrs['href'], 'label': d.get_text().strip()} for d in depts]
+            value = [f'{v["label"]} <{v["href"]}>' for v in value]
         elif label == 'description':
             description_bits = thing.select('p')
             value = "\n\n".join([bit.get_text().strip() for bit in description_bits])
