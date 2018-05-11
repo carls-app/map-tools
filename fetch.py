@@ -256,6 +256,13 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
             if override and override.get('centerpoint', []):
                 centerpoint = override['centerpoint']
 
+            if override and override.get('departments', []):
+                debug('has override depts', ident)
+                feature['properties']['departments'] = override['departments']
+
+            if override and override.get('offices', []):
+                feature['properties']['offices'] = override['offices']
+
             if len(outline):
                 # the first and last positions of at ring of coordinates
                 # must be the same
