@@ -182,6 +182,12 @@ def get_features(*, force=False, cache_dir: Path, overrides={}):
                 locations[ident]['properties']['categories'].add(category)
                 continue
 
+            # check if the entry is schedule for removal
+            deleted = next((x for x in overrides['removals'] if x['id'] == ident), False) is not False
+            if deleted:
+                debug('removing', ident)
+                continue
+
             # grab the override, if it exists
             override = next((x for x in overrides['changes'] if x['id'] == ident), None)
 
